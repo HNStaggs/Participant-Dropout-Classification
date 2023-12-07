@@ -59,13 +59,13 @@ setwd("~/Method Paper")
 # Load Data
 ```{r}
 # Redcap
-selfreport <- read_csv("vdap_cut.csv")
+selfreport <- read_csv("selfreport.csv")
 
 # Gorilla Visual Search Task
-cog1 <- read_csv("vdap_vs_final.csv")
+cog1 <- read_csv("visualsearch.csv")
 
 # Gorilla Flanker Task
-cog2 <- read_csv("gor_final.csv")
+cog2 <- read_csv("flanker.csv")
 
 # Data Quality 1
 t1 <- read_csv('Trust_1.csv')  #Quality Q1: redcap - ID, study start timestamp, favorite animal
