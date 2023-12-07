@@ -1,0 +1,422 @@
+---
+title: "DropoutClassification"
+author: "Halee Staggs"
+date: "2023-12-06"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Project Summary
+### Data prep for a binary classification task. The final model classifies study completers from study dropouts. Input features are based on self-report data (demographics). For those that completed the study, cognitive data is used to assess performance in addition to a data quality scoring system.
+
+# Import Packages
+```{r}
+#install.packages('corrplot')
+library(corrplot)
+#install.packages('readr')
+library(readr)
+#install.packages('stats')
+library(stats)
+#install.packages('devtools')
+library(devtools)
+#install.packages('Hmisc')
+library(Hmisc)
+#install.packages('descr')
+library(descr)
+#install.packages('ggpubr')
+library(gpubr)
+#install.packages('ggplot2')
+library(ggplot2)
+#install.packages('psych')
+library(psych)
+#install.packages('tidyverse')
+library(tidyverse)
+#install.packages('knitr')
+library(knitr)
+#install.packages('sjstats')
+library(sjstats)
+#install.packages('caret')
+library(caret)
+#install.packages('e1071')
+library(e1071)
+#install.packages('C50')
+library(C50)
+```
+
+# Set seed for reproducibility
+```{r}
+set.seed(2)
+```
+
+# Set Working Directory
+```{r}
+setwd("~/Method Paper")
+```
+
+# Load Data
+```{r}
+# Redcap
+selfreport <- read_csv("vdap_cut.csv")
+
+# Gorilla Visual Search Task
+cog1 <- read_csv("vdap_vs_final.csv")
+
+# Gorilla Flanker Task
+cog2 <- read_csv("gor_final.csv")
+
+# Data Quality 1
+t1 <- read_csv('Trust_1.csv')  #Quality Q1: redcap - ID, study start timestamp, favorite animal
+
+# Data Quality 2
+t2_24 <- read_csv('Trust_2_v24.csv')  #Quality Q2: gorilla - ID link 
+t2_26 <- read_csv('Trust_2_v26.csv')  #Quality Q2: gorilla - ID link 
+
+# Data Quality 3 and 4
+t34_24 <- read_csv('Trust_3_4_v24.csv')  #Quality Q3 and Q4: gorilla - T/F question 1 and 2
+t34_26 <- read_csv('Trust_3_4_v26.csv')  #Quality Q3 and Q4: gorilla - T/F question 1 and 2
+
+# Data Quality 5
+t5_24 <- read_csv('Trust_5_v24.csv')  #Quality Q5: gorilla - vacation
+t5_26 <- read_csv('Trust_5_v26.csv')  #Quality Q5: gorilla - vacation
+```
+
+# View Dataframes in console
+```{r}
+#View(selfreport)
+#View(cog1)
+#View(cog2)
+#View(t1)
+#View(t2_24)
+#View(t2_26)
+#View(t34_24)
+#View(t34_26)
+#View(t5_24)
+#View(t5_26)
+```
+
+# Inspect data types
+```{r}
+#Some datatypes will need to be updated before analysis
+str(selfreport)
+str(cog1)
+str(cog2)
+```
+
+# Updating Selfreport data types to factors
+```{r}
+selfreport$sex <- as.factor(selfreport$sex)  # Male, Female
+selfreport$ethnicity <- as.factor(selfreport$ethnicity)  # Hispanic, Non-Hispanic
+selfreport$pre_race <- as.factor(selfreport$pre_race)  # White,Black,Asian,Native,Morethan1,Other
+selfreport$area_type <- as.factor(selfreport$area_type)  # Urban, Suburban, Rural
+selfreport$edu_2 <- as.factor(selfreport$edu_2)  # <HS, HS/GED, AA/AS, BA/BS, MA/MS, MD/PHD
+selfreport$psychiatric_hist_status <- as.factor(selfreport$psychiatric_hist_status)  # Yes, No
+selfreport$nicotine_use <- as.factor(selfreport$nicotine_use)  # Yes, No
+selfreport$cannabis_use <- as.factor(selfreport$cannabis_use)  # Yes, No
+selfreport$alcohol_use <- as.factor(selfreport$alcohol_use)  # Yes, No
+ 
+```
+
+# Check for missing values, numerical descriptives, and categorical proportions
+```{r}
+summary(selfreport)
+summary(cog1)
+summary(cog2)
+```
+
+# Prepping Self-Report Data
+## Drop redundant or useless variables, or variables with missing data over 40% 
+```{r}
+selfreport <- selfreport[,-c(4,9,31:60)]  # Use column index number to drop
+```
+
+
+
+# Prepping Cognitive Data
+## Visual Search Task
+```{r}
+#Prepping visual search metrics 
+vs <- cog1 %>% filter(z_type == 'response_keyboard')  # Filter for participant response data only
+
+#Label array sizes
+vs$array[vs$array == '3Image8.jpg'] <- 'small'
+vs$array[vs$array == '2Image15.jpg'] <- 'large'
+vs$array[vs$array == '4ImageNoTarget.jpg'] <- 'large'
+vs$array[vs$array == '4Image8.jpg'] <- 'small'
+vs$array[vs$array == '3Image15.jpg'] <- 'large'
+vs$array[vs$array == '1Image8.jpg'] <- 'small'
+vs$array[vs$array == '1Image15.jpg'] <- 'large'
+vs$array[vs$array == '2ImageNT.jpg'] <- 'small'
+
+#Calculate Summary Metrics for participant for each array size (small, large) and condition (absent, present)
+
+#Absent condition, small array
+vs_absent_sm <- vs %>%
+  filter(cond == "Absent" & array == 'small') %>%
+  group_by(gor_id) %>%
+  summarise(vs_a_rt_mn_s = mean(as.numeric(rt)),
+            vs_a_rt_sd_s = sd(as.numeric(rt)),
+            vs_a_acc_s = mean(as.numeric(corr)))
+
+#Present condition, small array
+vs_present_sm <- vs %>%
+  filter(cond == "Present" & array == 'small') %>%
+  group_by(gor_id) %>%
+  summarise(vs_p_rt_mn_s = mean(as.numeric(rt)),
+            vs_p_rt_sd_s = sd(as.numeric(rt)),
+            vs_p_acc_s = mean(as.numeric(corr)))
+
+#Absent condition, large array
+vs_absent_lg <- vs %>%
+  filter(cond == "Absent" & array == 'large') %>%
+  group_by(gor_id) %>%
+  summarise(vs_a_rt_mn_l = mean(as.numeric(rt)),
+            vs_a_rt_sd_l = sd(as.numeric(rt)),
+            vs_a_acc_l = mean(as.numeric(corr)))
+
+#Present condition, large array
+vs_present_lg <- vs %>%
+  filter(cond == "Present" & array == 'large') %>%
+  group_by(gor_id) %>%
+  summarise(vs_p_rt_mn_l = mean(as.numeric(rt)),
+            vs_p_rt_sd_l = sd(as.numeric(rt)),
+            vs_p_acc_l = mean(as.numeric(corr)))
+
+#View summary data to ensure accurate
+#View(vs_absent_sm)
+#View(vs_present_sm)
+#View(vs_absent_lg)
+#View(vs_present_lg)
+```
+## Flanker task
+```{r}
+#Drop rows with missing values because they are empty metrics
+fl <- drop_na(cog2)
+
+#Calculate summary metrics by condition
+
+#Incongruent condition
+flank_incon <- g_clean %>%
+  filter(Cond == "Incongruent") %>%
+  group_by(ID) %>%
+  summarise(f_i_rt_mn = mean(as.numeric(RT)),
+            f_i_rt_sd = sd(as.numeric(RT)),
+            f_i_acc = mean(as.numeric(Ans)))
+
+#Congruent condition
+flank_con <- g_clean %>%
+  filter(Cond == "Congruent") %>%
+  group_by(ID) %>%
+  summarise(f_c_rt_mn = mean(as.numeric(RT)),
+            f_c_rt_sd = sd(as.numeric(RT)),
+            f_c_acc = mean(as.numeric(Ans)))
+
+#View metrics to ensure correct
+#View(flank_incon)
+#View(flank_con)
+
+```
+
+# Data Quality System
+```{r}
+# update redcap variable name to match variable name in t2 
+colnames(t1)[1] <- 'pt_id'  #update redcap variable name to match variable name in t2
+
+# update gorilla private id to an R-friendly variable name
+colnames(t2_24)[13] <- 'gor_id' 
+colnames(t2_26)[13] <- 'gor_id'
+colnames(t34_24)[13] <- 'gor_id'  
+colnames(t34_26)[13] <- 'gor_id'  
+colnames(t5_24)[13] <- 'gor_id' 
+colnames(t5_26)[13] <- 'gor_id'  
+
+# extract desired variables from each dataset based on index
+t1 <- t1[,c(1,3)]
+t2_24 <- t2_24[,c(13,28)]
+t2_26 <- t2_26[,c(13,28)]
+t34_24 <- t34_24[,c(13,28,30)]
+t34_26 <- t34_26[,c(13,28,30)]
+t5_24 <- t5_24[,c(13,34,38)]
+t5_26 <- t5_26[,c(13,34,38)]
+
+# Updates a few IDs that are actually correct
+t2_26[16,2] <- '1010'
+t2_26[80,2] <- '1021'
+
+# Update incorrect IDs for the purpose of merging - but then assign score of 0 for being a dropout
+t2_24[63,2] <- '1770'
+t2_24[64,2] <- '773'
+t2_24[99,2] <- '596'
+t2_24[18,2] <- '334'
+
+# Bind both versions of Gorilla ID link before merging with redcap
+t2 <- rbind(t2_24, t2_26)
+
+# Link redcap with first gorilla task
+id_link <- merge(t1, t2, by = 'pt_id')
+
+#assign score of 0 to previously incorrect IDs using datum index
+#773
+id_link[95,1] <- '0'
+#596
+id_link[83,1] <- '0'
+#334
+id_link[5,1] <- '0'
+
+# Create score variable for trust 2
+id_link$trust_2 <- if_else(id_link$pt_id != '0', '1', '0')
+
+# Bind together trust 3 and trust 4 from both versions
+t34 <- rbind(t34_24, t34_26)
+colnames(t34)[2] <- 'trust1'
+colnames(t34)[3] <- 'trust2'
+
+# Create score for answering both attention checks
+t34$a1 <- if_else(t34$trust1 != 'True', '0', '1')
+t34$a2 <- if_else(t34$trust2 != 'True', '0', '1')
+t34$trust_34 <- as.numeric(t34$a1)+as.numeric(t34$a2)
+
+# Bind together trust 5 from both versions
+t5 <- rbind(t5_24, t5_26) 
+
+# Rename zone type variable
+colnames(t5)[2] <- 'zone_type'
+
+# Filter text response
+t5 <- t5 %>% filter(zone_type == 'response_text_entry')
+
+# Give improper answers a score of zero
+t5[75,3] <- '0'
+t5[151,3] <- '0'
+t5[172,3] <- '0'
+
+# Assign trust 5 score variable
+t5$trust_5 <- if_else(t5$Response != '0', '1', '0')
+
+# Link remaining gorilla files
+trust <- reduce(list(id_link,t34,t5), inner_join, by = 'gor_id')
+#View(trust)
+
+#Extract Final List of Desired Variables for Data Quality Questions 1 - 5
+trust <- trust[,c(2,3,4,9,12)]
+
+# Need to add Data Quality Elements 6 and 7 which are based on reaction times
+trust$vs_log <- log(trust$vs_a_rt_sd_l)  # Log transform visual search reaction time
+trust$f_log <- log(trust$f_i_rt_sd)  # Log transform flanker incongruent reaction tiem
+
+trust$vs_z <- scale(trust$vs_log, center = TRUE, scale = TRUE)  # scale data
+trust$f_z <- scale(trust$f_log, center = TRUE, scale = TRUE)  # scale data
+
+# Update column names
+colnames(trust)[10] <- 'vs_z'
+colnames(trust)[11] <- 'f_z'
+
+# Create function to output outliers
+iqr_outliers <- function(var_col) {
+  quant_col <- as.matrix(quantile(var_col, na.rm = TRUE))
+  iqr_col <- ((quant_col[4])-(quant_col[2]))
+  col_min <- as.matrix(quant_col[1])
+  col_max <- as.matrix(quant_col[5])
+  iqr_high <- as.matrix((quant_col[4] + (1.5*iqr_col)))
+  iqr_low <- as.matrix((quant_col[2] - (1.5*iqr_col)))
+  iqr_ran <- bind_cols(max(iqr_low, col_min), min(iqr_high, col_max))
+  print(iqr_ran)
+}
+
+# Assign outliers a score of 0 for z scores less/more than 1.5*IQR of SD of visual search and flanker
+vs_out <- as.data.frame(iqr_outliers(trust$vs_z))
+f_out <- as.data.frame(iqr_outliers(trust$f_z))
+trust$trust_6 <- if_else(trust$vs_z < vs_out[1,1] | trust$vs_z > vs_out[1,2], 0, 1)
+trust$trust_7 <- if_else(trust$f_z < f_out[1,1] | trust$f_z > f_out[1,2], 0, 1)
+
+# Add together elements 1-7 for total score
+trust$score <- as.numeric(trust$trust_1) + as.numeric(trust$trust_2) + as.numeric(trust$trust_34) +
+  as.numeric(trust$trust_5) + as.numeric(trust$trust_6) + as.numeric(trust$trust_7)
+```
+
+# Combine cognitive tasks metrics, self-report data, and data quality "trust" scores into one dataframe
+```{r}
+#Create list of summary dataframes
+data_list <- list(selfreport, vs_absent_sm, vs_absent_lg, vs_present_sm, vs_present_lg, flank_con, flank_incon, trust)
+
+#Merge all data frames by common value (ID number)
+data_merge <- Reduce(function(x, y) merge(x, y, all=TRUE), data_list)
+
+#View(cog_merge)
+```
+
+## Assign Dropout Variable based on missing ID numbers
+```{r}
+data_merge$dropout <- if_else(is.na(data_merge$gor_id), 1, 0)
+```
+
+# Double check data types are correct before modeling
+```{r}
+#Verify data types
+str(data_merge)
+
+#Verify missing values
+summary(data_merge)
+```
+
+
+# C5.0 Decision Tree - Explanatory Model
+## Since this is a small sample, we will be using the full dataset to build an explanatory decision tree model
+```{r}
+# First impute missing values with numerical medians or categorical modes
+data_merge$age[is.na(data_merge$age)] <- median(data_merge$age, na.rm=TRUE)
+data_merge$sex[is.na(data_merge$sex)] <- max(data_merge$sex, na.rm = TRUE)
+data_merge$ethnicity[is.na(data_merge$ethnicity)] <- median(data_merge$ethnicity, na.rm = TRUE)
+data_merge$pre_race[is.na(data_merge$pre_race)] <- median(data_merge$pre_race, na.rm = TRUE)
+data_merge$area_type[is.na(data_merge$area_type)] <- median(data_merge$area_type, na.rm = TRUE)
+data_merge$edu_2[is.na(data_merge$edu_2)] <- median(data_merge$edu_2, na.rm = TRUE)
+data_merge$alcohol_status[is.na(data_merge$alcohol_status)] <- median(data_merge$alcohol_status, na.rm = TRUE)
+data_merge$psychiatric_hist_status[is.na(data_merge$psychiatric_hist_status)] <- min(data_merge$psychiatric_hist_status, na.rm = TRUE)
+data_merge$verify_veteran[is.na(data_merge$verify_veteran)] <- max(data_merge$verify_veteran, na.rm=TRUE)
+data_merge$nicotine[is.na(data_merge$nicotine)] <- median(data_merge$nicotine, na.rm=TRUE)
+data_merge$cannabis[is.na(data_merge$cannabis)] <- median(data_merge$cannabis, na.rm=TRUE)
+
+
+# Update data types as needed
+#data_merge$variable <- as.factor(data_merge$variable)
+#data_merge$variable <- as.numeric(data_merge$variable)
+```
+
+# Train C5.0 decision tree to classify dropout with demographic variables
+```{r}
+# Each node has a minimum of 8 cases to maintain power
+c50 <- C5.0(dropout ~ age + sex + ethn + race + area + edu + alcohol + cannabis + nicotine + veteran_status + psych_history, 
+            data = data_merge, control = C5.0Control(minCases = 8))
+
+#View model classification results
+c50
+
+#View plot of decision tree
+plot(c50)
+
+#View feature importance values for decision tree
+varImp(c50)
+```
+
+# Comparing Cognitive Performance Metrics Between users and non-users
+```{r}
+# Create variable combining people who use either nicotine or cannabis, and label 1: "user", everyone else is labeled 0: "nonuser"
+data_merge$both_bi <- if_else(data_merge$nico_bi == 1 | data_merge$cann_bi == 1, 1, 0)
+
+oneway.test(log(data_merge$vs_a_rt_mn_l) ~ data_merge$both_bi)
+oneway.test(log(data_merge$vs_p_rt_mn_l) ~ data_merge$both_bi)
+oneway.test(log(data_merge$f_i_rt_mn) ~ data_merge$both_bi)
+oneway.test(log(data_merge$f_c_rt_mn) ~ data_merge$both_bi)
+kruskal.test(data_merge$vs_a_acc_l, data_merge$both_bi)
+kruskal.test(data_merge$vs_p_acc_l, data_merge$both_bi)
+kruskal.test(data_merge$f_i_acc, data_merge$both_bi)
+kruskal.test(data_merge$f_c_acc, data_merge$both_bi)
+```
+
+
+# Comparing data quality between users and nonusers
+```{R}
+oneway.test(log(data_merge$score) ~ data_merge$both_bi, var.equal = TRUE)
+```
