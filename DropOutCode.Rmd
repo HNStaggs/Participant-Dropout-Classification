@@ -350,6 +350,12 @@ data_merge <- Reduce(function(x, y) merge(x, y, all=TRUE), data_list)
 ## Assign Dropout Variable based on missing ID numbers
 ```{r}
 data_merge$dropout <- if_else(is.na(data_merge$gor_id), 1, 0)
+
+#Confirm n of completer/dropout
+table(data_merge$dropout)
+
+#Confirm proportion of completer/dropout
+prop.table(table(data_merge$dropout))
 ```
 
 # Double check data types are correct before modeling
@@ -361,24 +367,90 @@ str(data_merge)
 summary(data_merge)
 ```
 
+# Exploratory Data Analysis - Normalized Bar Charts for Demographic Feature Separated by Outcome Variable 
+```{r}
+# Age x. Dropout
+age.do <- ggplot(data_merge, aes(age, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+ggpar(age.do, title = "Age by Dropout", xlab = 'Age', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Sex x. Dropout
+sex.do <- ggplot(data_merge, aes(sex, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(sex.do, title = "Sex by Dropout", xlab = 'Sex', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Ethnicity x. Dropout
+ethn.do <- ggplot(data_merge, aes(ethnicity, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(ethn.do, title = "Ethnicity by Dropout", xlab = 'Ethnicity', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Race x. Dropout
+race.do <- ggplot(data_merge, aes(race, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(race.do, title = "Race by Dropout", xlab = 'Race', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Area type x. Dropout
+area.do <- ggplot(data_merge, aes(area_type, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(area.do, title = "Residence Area Type by Dropout", xlab = 'Area Type', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Veteran Status x. Dropout
+vet.do <- ggplot(data_merge, aes(veteran_status, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(vet.do, title = "Veteran Status by Dropout", xlab = 'Veteran Status', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Education x. Dropout
+edu.do <- ggplot(data_merge, aes(edu_2, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(edu.do, title = "Education Degree by Dropout", xlab = 'Degree', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Nicotine Use x. Dropout
+nico.do <- ggplot(data_merge, aes(nicotine_use, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(nico.do, title = "Nicotine Use by Dropout", xlab = 'Nicotine Use', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Cannabis x. Dropout
+cann.do <- ggplot(data_merge, aes(cannabis_use, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(cann.do, title = "Cannabis Use by Dropout", xlab = 'Cannabis Use', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Alcohol x. Dropout
+alco.do <- ggplot(data_merge, aes(alcohol_use, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(alco.do, title = "Alcohol Use by Dropout", xlab = 'Alcohol Use', ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+# Psychiatric History x. Dropout
+psy.do <- ggplot(data_merge, aes(psychiatric_history, fill = dropout)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(psy.do, title = "Psychiatric History by Dropout", xlab = 'Psychiatric History', ylab = 'Count', legend.title = 'Group')
+
+```
+
 
 # C5.0 Decision Tree - Explanatory Model
 ## Since this is a small sample, we will be using the full dataset to build an explanatory decision tree model
 ```{r}
-# First impute missing values with numerical medians or categorical modes
-data_merge$age[is.na(data_merge$age)] <- median(data_merge$age, na.rm=TRUE)
-data_merge$sex[is.na(data_merge$sex)] <- max(data_merge$sex, na.rm = TRUE)
-data_merge$ethnicity[is.na(data_merge$ethnicity)] <- median(data_merge$ethnicity, na.rm = TRUE)
-data_merge$pre_race[is.na(data_merge$pre_race)] <- median(data_merge$pre_race, na.rm = TRUE)
-data_merge$area_type[is.na(data_merge$area_type)] <- median(data_merge$area_type, na.rm = TRUE)
-data_merge$edu_2[is.na(data_merge$edu_2)] <- median(data_merge$edu_2, na.rm = TRUE)
-data_merge$alcohol_status[is.na(data_merge$alcohol_status)] <- median(data_merge$alcohol_status, na.rm = TRUE)
-data_merge$psychiatric_hist_status[is.na(data_merge$psychiatric_hist_status)] <- min(data_merge$psychiatric_hist_status, na.rm = TRUE)
-data_merge$verify_veteran[is.na(data_merge$verify_veteran)] <- max(data_merge$verify_veteran, na.rm=TRUE)
-data_merge$nicotine[is.na(data_merge$nicotine)] <- median(data_merge$nicotine, na.rm=TRUE)
-data_merge$cannabis[is.na(data_merge$cannabis)] <- median(data_merge$cannabis, na.rm=TRUE)
-
-
 # Update data types as needed
 #data_merge$variable <- as.factor(data_merge$variable)
 #data_merge$variable <- as.numeric(data_merge$variable)
